@@ -2,7 +2,7 @@
 
 **NOTE: This is not official Strimzi project!**
 
-Strimzi Drain Cleaner is an utility which helps with moving the Kafka pods deployed by [Strimzi](https://strimzi.io/) from nodes which are being drained.
+Strimzi Drain Cleaner is utility which helps with moving the Kafka pods deployed by [Strimzi](https://strimzi.io/) from nodes which are being drained.
 It is useful if you want the Strimzi operator to move the pods instead of Kubernetes itself.
 The advantage of this approach is that the Strimzi operator makes sure that no pods become under-replicated during the node draining.
 To use it:
@@ -59,21 +59,16 @@ spec:
 ```
 
 * Deploy the Strimzi Drain Cleaner
-* Drain the node with some Kafka or Zookeeper pods
+* Drain the node with some Kafka or Zookeeper pods using the `kubectl drain` command
+
+_Note: If you change the service name or namespace, you have to update the Webhook configuration, and the certificates to match the new address._
 
 ## How does it work?
 
-Strimzi Drain Cleaner is watching your Kubernetes cluster and when it finds out that a node is unschedulable, it will check if any Strimzi Kafka and Zookeeper pods are running on it.
-In case they are, it will annotate them with the `strimzi.io/manual-rolling-update` annotation which will tell Strimzi Cluster Operator that this pod needs to be restarted.
+Strimzi Drain Cleaner using Kubernetes Admission Control features and Validating Webhooks to find out when something tries to evict the Kafka or Zookeeper pods are.
+It annotates them with the `strimzi.io/manual-rolling-update` annotation which will tell Strimzi Cluster Operator that this pod needs to be restarted.
 Strimzi will roll it in the next reconciliation using its algorithms which make sure the cluster is available.
 **This is supported from Strimzi 0.21.0.**
-
-There is no easy way to find out that a node is being drained.
-Using the `unschedulable` field is not the best solution because it would move pods any time when the node is marked as unschedulable.
-This happens for example when you just cordon the node without draining it.
-So be careful about this.
-
-[![Strimzi Drain Cleaner demo](https://img.youtube.com/vi/nLC6KPALkE4/0.jpg)](https://www.youtube.com/watch?v=nLC6KPALkE4)
 
 ## Deployment
 
@@ -84,6 +79,10 @@ Then, apply all the files:
 ```
 kubectl apply -f ./deploy
 ```
+
+If you want to use this only to Kafka and not to ZooKeeper, you can edit the Deployment and remove the `--zookeeper` option.
+
+_Note: If you change the service name or namespace, you have to update the Webhook configuration, and the certificates to match the new address._
 
 ## Build 
 
@@ -115,6 +114,8 @@ If you want to build an _über-jar_, execute the following command:
 The application is now runnable using `java -jar target/strimzi-cistic-odpadu-1.0.0-SNAPSHOT-runner.jar`.
 
 ### Creating a native executable
+
+_Note: The native packaging does not work right now as it cannot properly deserialize the AdmissionReview request._
 
 You can create a native executable using: 
 ```shell script
