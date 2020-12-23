@@ -34,3 +34,9 @@ nb-configuration.xml
 # patch
 *.orig
 *.rej
+
+# Certificates
+*.pem
+*.key
+*.crt
+*.csr

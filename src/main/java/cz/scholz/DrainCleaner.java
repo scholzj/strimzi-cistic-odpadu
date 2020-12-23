@@ -1,75 +1,136 @@
 package cz.scholz;
 
 import io.fabric8.kubernetes.api.model.Pod;
+import io.fabric8.kubernetes.api.model.admission.AdmissionRequest;
+import io.fabric8.kubernetes.api.model.admission.AdmissionReview;
+import io.fabric8.kubernetes.api.model.admission.AdmissionReviewBuilder;
+import io.fabric8.kubernetes.api.model.policy.Eviction;
+import io.fabric8.kubernetes.client.DefaultKubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClient;
+import io.quarkus.runtime.Quarkus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import picocli.CommandLine;
 
-import javax.inject.Inject;
-import java.util.Collections;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.regex.Pattern;
 
 @CommandLine.Command
+@Path("/drainer")
 public class DrainCleaner implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(DrainCleaner.class);
 
-    @Inject
-    KubernetesClient client;
+    private static final KubernetesClient client = new DefaultKubernetesClient();
 
-    @CommandLine.Option(names = {"-r", "--refresh"}, description = "How often to refresh the data and recheck whether pods need to be drained", defaultValue = "30000")
-    int refresh;
+    @CommandLine.Option(names = {"-k", "--kafka"}, description = "Handle Kafka pod evictions", defaultValue = "false")
+    boolean kafka;
 
-    void cleanTheDrain()    {
-        List<String> nodeNames = client.nodes().list().getItems()
-                .stream()
-                .filter(node -> node.getSpec() != null && node.getSpec().getUnschedulable() == Boolean.TRUE)
-                .map(node -> node.getMetadata().getName())
-                .collect(Collectors.toList());
+    @CommandLine.Option(names = {"-z", "--zookeeper"}, description = "Handle ZooKeeper pod evictions", defaultValue = "false")
+    boolean zoo;
 
-        if (nodeNames.isEmpty()) {
-            LOG.info("No unschedulable nodes found. Maybe next time ...");
-            return;
+    static Pattern matchingPattern;
+
+    public DrainCleaner() {
+
+    }
+
+    @POST
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public AdmissionReview webhook(AdmissionReview review) {
+        LOG.debug("Received AdmissionReview request: {}", review);
+
+        AdmissionRequest request = review.getRequest();
+
+        if (request.getObject() instanceof Eviction)    {
+            Eviction eviction = (Eviction) request.getObject();
+
+            if (eviction.getMetadata() != null
+                    && matchingPattern.matcher(eviction.getMetadata().getName()).matches()) {
+                String name = eviction.getMetadata().getName();
+                String namespace = eviction.getMetadata().getNamespace();
+
+                LOG.info("Received eviction webhook for Pod {} in namespace {}", name, namespace);
+
+                if (request.getDryRun())    {
+                    LOG.info("Running in dry-run mode. Pod {} in namespace {} will not be annotated for restart", name, namespace);
+                } else {
+                    LOG.info("Pod {} in namespace {} will be annotated for restart", name, namespace);
+                    annotatePodForRestart(name, namespace);
+                }
+            } else {
+                LOG.info("Received eviction event which does not match any relevant pods.");
+            }
+        } else {
+            LOG.warn("Weird, this does not seem to be an Eviction webhook.");
         }
 
-        LOG.info("Found unschedulable nodes {} ... lets check if they have any Strimzi pods!", nodeNames);
+        return new AdmissionReviewBuilder()
+                .withNewResponse()
+                    .withUid(request.getUid())
+                    .withAllowed(true)
+                .endResponse()
+                .build();
+    }
 
-        List<Pod> pods = client.pods().inAnyNamespace().withLabels(Collections.singletonMap("strimzi.io/kind", "Kafka")).list().getItems();
+    void annotatePodForRestart(String name, String namespace)    {
+        Pod pod = client.pods().inNamespace(namespace).withName(name).get();
 
-        for (Pod pod : pods)    {
-            if (pod.getMetadata().getLabels() != null
-                    && pod.getMetadata().getLabels().get("strimzi.io/name") != null
-                    && (pod.getMetadata().getLabels().get("strimzi.io/name").endsWith("kafka") || pod.getMetadata().getLabels().get("strimzi.io/name").endsWith("zookeeper"))) {
-                LOG.debug("Checking if pod {} is on an unschedulable node!", pod.getMetadata().getName());
-
-                if (nodeNames.contains(pod.getSpec().getNodeName())) {
-                    LOG.info("Pod {} is running on un unschedulable node {} and will be marked for draining", pod.getMetadata().getName(), pod.getSpec().getNodeName());
-
-                    //pod.getMetadata().getAnnotations().put("strimzi.io/manual-rolling-update", "true");
-                    //client.pods().inNamespace(pod.getMetadata().getNamespace()).withName(pod.getMetadata().getName()).patch(pod);
-                    client.pods().inNamespace(pod.getMetadata().getNamespace()).withName(pod.getMetadata().getName()).edit()
+        if (pod != null) {
+            if (pod.getMetadata() != null
+                    && pod.getMetadata().getLabels() != null
+                    && "Kafka".equals(pod.getMetadata().getLabels().get("strimzi.io/kind"))) {
+                if (pod.getMetadata().getAnnotations() == null
+                        || !"true".equals(pod.getMetadata().getAnnotations().get("strimzi.io/manual-rolling-update"))) {
+                    client.pods().inNamespace(namespace).withName(name).edit()
                             .editMetadata()
                                 .addToAnnotations("strimzi.io/manual-rolling-update", "true")
                             .endMetadata()
                             .done();
+
+                    LOG.info("Pod {} in namespace {} found and annotated for restart", name, namespace);
+                } else {
+                    LOG.info("Pod {} in namespace {} is already annotated for restart", name, namespace);
                 }
+
+
+            } else {
+                LOG.debug("Pod {} in namespace {} is not Strimzi pod", name, namespace);
             }
+        } else {
+            LOG.warn("Pod {} in namespace {} was not found and cannot be annotated", name, namespace);
         }
     }
 
     @Override
     public void run() {
-        client.getConfiguration().setTrustCerts(true);
-
-        try {
-            while (true)    {
-                cleanTheDrain();
-                Thread.sleep(refresh);
-            }
-        } catch (InterruptedException e) {
-            LOG.error("Got interrupted while waiting for the next refresh", e);
+        if (!kafka && !zoo) {
+            LOG.error("At least one of the --kafka and --zookeeper options needs ot be enabled!");
             System.exit(1);
+        } else {
+            List<String> contains = new ArrayList<>(2);
+
+            if (kafka)  {
+                contains.add("-kafka-");
+                LOG.info("Draining of Kafka pods enabled");
+            }
+
+            if (zoo)    {
+                contains.add("-zookeeper-");
+                LOG.info("Draining of ZooKeeper pods enabled");
+            }
+
+            String patternString = ".+(" + String.join("|", contains) + ")[0-9]+";
+            LOG.info("Matching pattern is {}", patternString);
+            matchingPattern = Pattern.compile(patternString);
         }
+
+        Quarkus.waitForExit();
     }
 }

@@ -1,12 +1,14 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: strimzi-cistic-odpadu
+  name: strimzi-drain-cleaner
+  labels:
+    app: strimzi-drain-cleaner
 subjects:
   - kind: ServiceAccount
-    name: strimzi-cistic-odpadu
-    namespace: myproject
+    name: strimzi-drain-cleaner
+    namespace: strimzi-drain-cleaner
 roleRef:
   kind: ClusterRole
-  name: strimzi-cistic-odpadu
+  name: strimzi-drain-cleaner
   apiGroup: rbac.authorization.k8s.io
