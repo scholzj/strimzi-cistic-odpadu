@@ -28,6 +28,10 @@ public class DrainCleaner implements Runnable {
 
     private static final KubernetesClient client = new DefaultKubernetesClient();
 
+    // Needed for native
+    //@Inject
+    //KubernetesClient client;
+
     @CommandLine.Option(names = {"-k", "--kafka"}, description = "Handle Kafka pod evictions", defaultValue = "false")
     boolean kafka;
 
