@@ -26,11 +26,7 @@ import java.util.regex.Pattern;
 public class DrainCleaner implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(DrainCleaner.class);
 
-    private static final KubernetesClient client = new DefaultKubernetesClient();
-
-    // Needed for native
-    //@Inject
-    //KubernetesClient client;
+    private static KubernetesClient client;
 
     @CommandLine.Option(names = {"-k", "--kafka"}, description = "Handle Kafka pod evictions", defaultValue = "false")
     boolean kafka;
@@ -41,7 +37,9 @@ public class DrainCleaner implements Runnable {
     static Pattern matchingPattern;
 
     public DrainCleaner() {
-
+        if (client == null) {
+            client = new DefaultKubernetesClient();
+        }
     }
 
     @POST
@@ -84,6 +82,11 @@ public class DrainCleaner implements Runnable {
     }
 
     void annotatePodForRestart(String name, String namespace)    {
+        /*MixedOperation<Pod, PodList, PodResource<Pod>> podOperations = client.pods();
+        NonNamespaceOperation<Pod, PodList, PodResource<Pod>> inNamespace = podOperations.inNamespace(namespace);
+        PodResource<Pod> withName = inNamespace.withName(name);
+        Pod pod = withName.get();*/
+
         Pod pod = client.pods().inNamespace(namespace).withName(name).get();
 
         if (pod != null) {
@@ -92,11 +95,16 @@ public class DrainCleaner implements Runnable {
                     && "Kafka".equals(pod.getMetadata().getLabels().get("strimzi.io/kind"))) {
                 if (pod.getMetadata().getAnnotations() == null
                         || !"true".equals(pod.getMetadata().getAnnotations().get("strimzi.io/manual-rolling-update"))) {
-                    client.pods().inNamespace(namespace).withName(name).edit()
-                            .editMetadata()
-                                .addToAnnotations("strimzi.io/manual-rolling-update", "true")
-                            .endMetadata()
-                            .done();
+                    pod.getMetadata().getAnnotations().put("strimzi.io/manual-rolling-update", "true");
+                    client.pods().inNamespace(namespace).withName(name).patch(pod);
+
+//                    client.pods().inNamespace(namespace).withName(name).edit()
+//                            .
+//                            .editMetadata()
+//                                .addToAnnotations("strimzi.io/manual-rolling-update", "true")
+//                            .endMetadata()
+//                            .done();
+                    //client.pods().inNamespace(namespace).withName(name).patch()
 
                     LOG.info("Pod {} in namespace {} found and annotated for restart", name, namespace);
                 } else {
