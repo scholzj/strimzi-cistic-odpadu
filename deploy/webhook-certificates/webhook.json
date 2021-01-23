@@ -12,6 +12,9 @@
         "size": 2048
     },
     "hosts": [
-        "strimzi-drain-cleaner.strimzi-drain-cleaner.svc"
+        "strimzi-drain-cleaner",
+        "strimzi-drain-cleaner.strimzi-drain-cleaner",
+        "strimzi-drain-cleaner.strimzi-drain-cleaner.svc",
+        "strimzi-drain-cleaner.strimzi-drain-cleaner.svc.cluster.local"
     ]
 }
