@@ -1,36 +1,33 @@
 package cz.scholz;
 
-import io.quarkus.runtime.Quarkus;
+import io.fabric8.kubernetes.api.model.Pod;
+import io.fabric8.kubernetes.api.model.admission.v1.AdmissionRequest;
+import io.fabric8.kubernetes.api.model.admission.v1.AdmissionReview;
+import io.fabric8.kubernetes.api.model.admission.v1.AdmissionReviewBuilder;
+import io.fabric8.kubernetes.api.model.policy.Eviction;
+import io.fabric8.kubernetes.client.KubernetesClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import picocli.CommandLine;
 
-import javax.enterprise.inject.Produces;
-import java.util.ArrayList;
-import java.util.List;
+import javax.enterprise.context.Dependent;
+import javax.inject.Inject;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.MediaType;
 import java.util.regex.Pattern;
 
-@CommandLine.Command
-//@Path("/drainer")
-public class DrainCleaner implements Runnable {
-    private static final Logger LOG = LoggerFactory.getLogger(DrainCleaner.class);
+@Dependent
+@Path("/drainer")
+public class ValidatingWebhook {
+    private static final Logger LOG = LoggerFactory.getLogger(ValidatingWebhook.class);
 
-    //private static KubernetesClient client;
+    @Inject
+    KubernetesClient client;
 
-    @CommandLine.Option(names = {"-k", "--kafka"}, description = "Handle Kafka pod evictions", defaultValue = "false")
-    boolean kafka;
-
-    @CommandLine.Option(names = {"-z", "--zookeeper"}, description = "Handle ZooKeeper pod evictions", defaultValue = "false")
-    boolean zoo;
-
-    @Produces
-    static Pattern matchingPattern;
-
-    /*public DrainCleaner() {
-        if (client == null) {
-            client = new DefaultKubernetesClient();
-        }
-    }
+    @Inject
+    Pattern matchingPattern;
 
     @POST
     @Produces(MediaType.APPLICATION_JSON)
@@ -74,10 +71,10 @@ public class DrainCleaner implements Runnable {
     }
 
     void annotatePodForRestart(String name, String namespace)    {
-//        MixedOperation<Pod, PodList, PodResource<Pod>> podOperations = client.pods();
-//        NonNamespaceOperation<Pod, PodList, PodResource<Pod>> inNamespace = podOperations.inNamespace(namespace);
-//        PodResource<Pod> withName = inNamespace.withName(name);
-//        Pod pod = withName.get();
+        /*MixedOperation<Pod, PodList, PodResource<Pod>> podOperations = client.pods();
+        NonNamespaceOperation<Pod, PodList, PodResource<Pod>> inNamespace = podOperations.inNamespace(namespace);
+        PodResource<Pod> withName = inNamespace.withName(name);
+        Pod pod = withName.get();*/
 
         Pod pod = client.pods().inNamespace(namespace).withName(name).get();
 
@@ -110,9 +107,9 @@ public class DrainCleaner implements Runnable {
         } else {
             LOG.warn("Pod {} in namespace {} was not found and cannot be annotated", name, namespace);
         }
-    }*/
+    }
 
-    @Override
+    /*@Override
     public void run() {
         if (!kafka && !zoo) {
             LOG.error("At least one of the --kafka and --zookeeper options needs ot be enabled!");
@@ -136,5 +133,5 @@ public class DrainCleaner implements Runnable {
         }
 
         Quarkus.waitForExit();
-    }
+    }*/
 }

@@ -11,7 +11,7 @@ To use it:
 This will block Kubernetes from moving the pods on their own.
   
 ```yaml
-apiVersion: kafka.strimzi.io/v1beta1
+apiVersion: kafka.strimzi.io/v1beta2
 kind: Kafka
 metadata:
   name: my-cluster

@@ -7,11 +7,11 @@
 #
 # Then, build the image with:
 #
-# docker build -f src/main/docker/Dockerfile.native -t quarkus/strimzi-cistic-odpadu .
+# docker build -f src/main/docker/Dockerfile.native -t quarkus/code-with-quarkus .
 #
 # Then run the container using:
 #
-# docker run -i --rm -p 8080:8080 quarkus/strimzi-cistic-odpadu
+# docker run -i --rm -p 8080:8080 quarkus/code-with-quarkus
 #
 ###
 FROM registry.access.redhat.com/ubi8/ubi-minimal:8.3
@@ -21,7 +21,7 @@ RUN chown 1001 /work \
     && chown 1001:root /work
 COPY --chown=1001:root target/*-runner /work/application
 
-EXPOSE 8080 8443
+EXPOSE 8080
 USER 1001
 
-ENTRYPOINT [ "/work/application" ]
+CMD ["./application", "-Dquarkus.http.host=0.0.0.0"]
