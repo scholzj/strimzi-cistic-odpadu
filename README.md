@@ -142,3 +142,28 @@ You can build the container for example using the _distro-less_ base image (use 
 docker build -f src/main/docker/Dockerfile.native-distroless -t quay.io/scholzj/strimzi-cistic-odpadu:latest .
 docker push quay.io/scholzj/strimzi-cistic-odpadu:latest
 ```
+
+## Test
+
+Some unit tests are included.
+You can also test it manually by evicting pods or by posting admission reviews.
+
+### Evicting pods
+
+* Install the Drain Cleaner
+* Proxy to the Kubernetes API server
+  ```
+  kubectl proxy
+  ```
+* Use `curl` to trigger eviction _(change pod name and namespace as needed)_:
+  ```
+  curl -v -H 'Content-type: application/json' http://localhost:8001/api/v1/namespaces/myproject/pods/my-cluster-zookeeper-1/eviction -d @src/test/resources/example-eviction-request.json
+  ```
+
+### Posting admission review requests
+
+* Run Drain Cleaner locally (`./mvnw compile quarkus:dev`)
+* Use `curl` to post the Admission Review Request manually:
+  ```
+  curl -v -H 'Content-type: application/json' http://localhost:8080/drainer -d @src/test/resources/example-admission-review.json
+  ```
