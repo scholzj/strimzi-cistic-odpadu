@@ -17,7 +17,6 @@ metadata:
   name: my-cluster
 spec:
   kafka:
-    version: 2.6.0
     replicas: 3
     listeners:
       - name: plain
@@ -32,8 +31,6 @@ spec:
       offsets.topic.replication.factor: 3
       transaction.state.log.replication.factor: 3
       transaction.state.log.min.isr: 2
-      log.message.format.version: "2.6"
-      inter.broker.protocol.version: "2.6"
     storage:
       type: jbod
       volumes:
@@ -72,18 +69,46 @@ Strimzi will roll it in the next reconciliation using its algorithms which make 
 
 ## Deployment
 
-You can use the YAML files from the `deploy` directory to deploy Strimzi Drain Cleaner into your Kubernetes cluster.
-First, edit the ClusterRoleBinding file and change the service account namespace to the namespace into which you plan to deploy it.
-Then, apply all the files:
-
-```
-kubectl apply -f ./deploy
-```
-
 If you want to use this only to Kafka and not to ZooKeeper, you can edit the Deployment and remove the `--zookeeper` option.
 
-_Note: If you change the service name or namespace, you have to update the Webhook configuration, and the certificates to match the new address._
+### On OpenShift
 
+On OpenShift, you can have the certificates needed for the webhook generated automatically and injected into the pod / webhook configuration.
+To install the Drain Cleaner on OpenShift, use the `./deploy/openshift` directory:
+
+```
+kubectl apply -f ./deploy/openshift
+```
+
+### On Kubernetes with CertManager
+
+On Kubernetes, when you use Cert Manager, you can have the certificates needed for the webhook generated automatically and injected into the pod / webhook configuration.
+To install the Drain Cleaner on Kubernetes with installed CertManager, use the `./deploy/certmanager` directory:
+
+```
+kubectl apply -f ./deploy/certmanager
+```
+
+### On Kubernetes without CertManager
+
+On Kubernetes, when you do not use Cert Manager, the certificates needed for the webhook need to be geenrated manually.
+Follow the instructions in `./deploy/kubernetes` directory.
+
+## See it in action
+
+You can easily test how it works:
+* Install Strimzi or AMQ Streams in your cluster
+* Deploy Kafka cluster with Pod Disruption Budget configuration having `masUnavailable` set to `0` as shown in the example above
+* Install the Drain Cleaner
+* Drain one of the Kubernetes nodes with one of the Kafka or ZooKeeper pods
+    ```
+    kubectl drain <worker-node> --delete-emptydir-data --ignore-daemonsets --timeout=6000s --force
+    ```
+* Watch how it works:
+    * The `kubetl drain` command will wait for the Kafka / ZooKeeper to be drained
+    * The Drain Cleaner log should show how it gets the eviction events
+    * Strimzi Cluster Operator log should show how it rolls the pods which are being evicted
+    
 ## Build 
 
 This project uses [Quarkus, the Supersonic Subatomic Java Framework](https://quarkus.io/).
@@ -108,3 +133,12 @@ Or you can run the native executable build for Linux in a container using:
 ```
 
 You can then execute your native executable with: `./target/strimzi-cistic-odpadu-1.0.0-SNAPSHOT-runner`.
+
+### Building a container image
+
+You can build the container for example using the _distro-less_ base image (use your own repository ;-)):
+
+```
+docker build -f src/main/docker/Dockerfile.native-distroless -t quay.io/scholzj/strimzi-cistic-odpadu:latest .
+docker push quay.io/scholzj/strimzi-cistic-odpadu:latest
+```

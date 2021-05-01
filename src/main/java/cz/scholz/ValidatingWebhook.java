@@ -29,13 +29,21 @@ public class ValidatingWebhook {
     @Inject
     Pattern matchingPattern;
 
+    // Default constructor => used in production
+    public ValidatingWebhook() {
+    }
+
+    // Parametrized constructor => used in tests
+    public ValidatingWebhook(KubernetesClient client, Pattern matchingPattern) {
+        this.client = client;
+        this.matchingPattern = matchingPattern;
+    }
+
     @POST
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     public AdmissionReview webhook(AdmissionReview review) {
         LOG.debug("Received AdmissionReview request: {}", review);
-        //ObjectMapper mapper = new ObjectMapper();
-        //LOG.info("Received AdmissionReview request JSON: {}", mapper.writeValueAsString(review));
 
         AdmissionRequest request = review.getRequest();
 
@@ -71,11 +79,6 @@ public class ValidatingWebhook {
     }
 
     void annotatePodForRestart(String name, String namespace)    {
-        /*MixedOperation<Pod, PodList, PodResource<Pod>> podOperations = client.pods();
-        NonNamespaceOperation<Pod, PodList, PodResource<Pod>> inNamespace = podOperations.inNamespace(namespace);
-        PodResource<Pod> withName = inNamespace.withName(name);
-        Pod pod = withName.get();*/
-
         Pod pod = client.pods().inNamespace(namespace).withName(name).get();
 
         if (pod != null) {
@@ -86,14 +89,6 @@ public class ValidatingWebhook {
                         || !"true".equals(pod.getMetadata().getAnnotations().get("strimzi.io/manual-rolling-update"))) {
                     pod.getMetadata().getAnnotations().put("strimzi.io/manual-rolling-update", "true");
                     client.pods().inNamespace(namespace).withName(name).patch(pod);
-
-//                    client.pods().inNamespace(namespace).withName(name).edit()
-//                            .
-//                            .editMetadata()
-//                                .addToAnnotations("strimzi.io/manual-rolling-update", "true")
-//                            .endMetadata()
-//                            .done();
-                    //client.pods().inNamespace(namespace).withName(name).patch()
 
                     LOG.info("Pod {} in namespace {} found and annotated for restart", name, namespace);
                 } else {
@@ -108,30 +103,4 @@ public class ValidatingWebhook {
             LOG.warn("Pod {} in namespace {} was not found and cannot be annotated", name, namespace);
         }
     }
-
-    /*@Override
-    public void run() {
-        if (!kafka && !zoo) {
-            LOG.error("At least one of the --kafka and --zookeeper options needs ot be enabled!");
-            System.exit(1);
-        } else {
-            List<String> contains = new ArrayList<>(2);
-
-            if (kafka)  {
-                contains.add("-kafka-");
-                LOG.info("Draining of Kafka pods enabled");
-            }
-
-            if (zoo)    {
-                contains.add("-zookeeper-");
-                LOG.info("Draining of ZooKeeper pods enabled");
-            }
-
-            String patternString = ".+(" + String.join("|", contains) + ")[0-9]+";
-            LOG.info("Matching pattern is {}", patternString);
-            matchingPattern = Pattern.compile(patternString);
-        }
-
-        Quarkus.waitForExit();
-    }*/
 }
