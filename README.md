@@ -1,6 +1,6 @@
 # Strimzi Čistič Odpadů (Drain Cleaner)
 
-**NOTE: This is not official Strimzi project!**
+**NOTE: This project moved to https://github.com/strimzi/drain-cleaner**
 
 Strimzi Drain Cleaner is utility which helps with moving the Kafka pods deployed by [Strimzi](https://strimzi.io/) from nodes which are being drained.
 It is useful if you want the Strimzi operator to move the pods instead of Kubernetes itself.
